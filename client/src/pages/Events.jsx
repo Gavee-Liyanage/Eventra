@@ -1,29 +1,45 @@
-import React, { useState } from "react";
-import { dummyEvents } from "../assets/assets";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import EventCard from "../components/EventCard";
 import { Search } from "lucide-react";
 
 const Events = () => {
+  const [events, setEvents] = useState([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [priceFilter, setPriceFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
 
   // Filter Logic
-  const filteredEvents = dummyEvents.filter((event) => {
-    const matchesSearch =
-      event.title.toLowerCase().includes(search.toLowerCase()) ||
-      event.location.toLowerCase().includes(search.toLowerCase());
+  const fetchEvents = async () => {
+    try {
+      const res = await axios.get("http://localhost:3000/api/events", {
+        params: {
+          search,
+          category,
+          priceFilter,
+        },
+      });
 
-    const matchesCategory =
-      category === "All" || event.category === category;
+      setEvents(res.data);
+      setLoading(false);
+    } catch (err) {
+      console.log(err);
+      setLoading(false);
+    }
+  };
 
-    const matchesPrice =
-      priceFilter === "All" ||
-      (priceFilter === "Free" && event.price === 0) ||
-      (priceFilter === "Under50" && event.price < 50);
+  useEffect(() => {
+    fetchEvents();
+  }, [search, category, priceFilter]);
 
-    return matchesSearch && matchesCategory && matchesPrice;
-  });
+
+  const handleSearch = () => {
+    fetchEvents();
+  };
+
+  if (loading) return <p className="pt-40 text-center">Loading events...</p>;
+
 
   return (
     <div className="min-h-screen bg-gray-50 pt-28 pb-16 px-6 md:px-16">
@@ -67,7 +83,10 @@ const Events = () => {
           />
 
           {/* Search Button */}
-          <button className="flex items-center justify-center gap-2 bg-indigo-800 hover:bg-indigo-600 text-white px-8 py-4 font-semibold transition duration-300">
+          <button
+            onClick={handleSearch}
+            className="flex items-center justify-center gap-2 bg-indigo-800 hover:bg-indigo-600 text-white px-8 py-4 font-semibold transition duration-300"
+          >
             <Search size={18} />
             Search
           </button>
@@ -101,13 +120,13 @@ const Events = () => {
         </div>
       </div>
 
-      {/* 🔥 Trending Section */}
+      {/* Trending Section */}
       <h2 className="text-xl font-semibold mb-4 text-gray-900">
         🔥 Trending This Week
       </h2>
 
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 text-gray-900">
-        {filteredEvents.map((event) => (
+        {events.map((event) => (
           <EventCard key={event._id} event={event} />
         ))}
       </div>

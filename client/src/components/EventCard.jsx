@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, {useState}from "react";
 import { useNavigate } from "react-router-dom";
 import { HeartIcon, BookmarkIcon } from "lucide-react";
 
 const EventCard = ({ event }) => {
   const navigate = useNavigate();
   const [liked, setLiked] = useState(false);
+
+   if (!event) return null;
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition duration-300 cursor-pointer"
@@ -29,12 +31,7 @@ const EventCard = ({ event }) => {
           {liked ? <BookmarkIcon size={24} className="fill-gray-700"  /> : <BookmarkIcon size={24} className="text-gray-700" />}
         </button>
 
-        {/* Badge */}
-        {event.badge && (
-          <span className="absolute top-3 left-3 bg-orange-100 text-orange-600 text-xs font-semibold px-3 py-1 rounded-full">
-            {event.badge}
-          </span>
-        )}
+        
       </div>
 
       {/* Content Section */}
