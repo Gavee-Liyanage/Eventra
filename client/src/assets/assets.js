@@ -1,9 +1,11 @@
 import logo from './favicon4.svg'
 import background_img_1 from './background_img.jpg'
+import logo_Quick from './logo_Quick.svg'
 
 export const assets = {
     logo,
-    background_img_1
+    background_img_1,
+    logo_Quick
 }
 
 export const dummyTrailers = [
@@ -392,6 +394,36 @@ export const dummyEvents = [
         image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
         badge: "Chef's special",
     },
+    {
+        _id: "6",
+        title: "Marathon for a Cause: Run for Hope",
+        date: "2026-10-05T07:00:00",
+        location: "City Park",
+        price: 50.00,
+        image: "https://images.unsplash.com/photo-1508609349937-5ec4ae374ebf",
+        category: "Sports",
+        badge: "Charity event",
+    },
+    {
+        _id: "7",
+        title: "Gourmet Food Festival 2026",
+        date: "2026-11-20T12:00:00",
+        location: "Downtown Plaza",
+        price: 25.00,
+        image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
+        category: "Food & Drink",
+        badge: "Family-friendly",
+    },
+    {
+        _id: "8",
+        title: "Live Concert: The Electric Vibes",
+        date: "2026-12-15T20:00:00",
+        location: "Grand Arena",
+        price: 120.00,
+        image: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d",
+        category: "Music",
+        badge: "Hot ticket",
+    }
 ]
 
 
