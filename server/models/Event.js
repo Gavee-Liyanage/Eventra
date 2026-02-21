@@ -3,14 +3,24 @@ import mongoose from "mongoose";
 const eventSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
-    description: { type: String, default: "" },
     location: { type: String, default: "" },
-    date: { type: Date, required: true },
+    date: { type: String, default: "" }, // "YYYY-MM-DD"
+    time: { type: String, default: "" },
+    category: { type: String, default: "Event" },
+    image: { type: String, default: "" },
+    description: { type: String, default: "" },
+
+    
     price: { type: Number, default: 0 },
-    category: { type: String, default: "Other" },
-    image: { type: String, default: "" }
+    ticketPrices: {
+      standing: { type: Number, default: 0 },
+      seating: { type: Number, default: 0 },
+      vip: { type: Number, default: 0 },
+      earlyBird: { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Event", eventSchema);
+const Event = mongoose.model("Event", eventSchema);
+export default Event;

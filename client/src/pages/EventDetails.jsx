@@ -34,8 +34,9 @@ const EventDetails = () => {
         </h3>
 
         <p className="text-gray-500 text-sm mt-1">
-          {new Date(event.date).toLocaleString()}
+          {new Date(event.date).toLocaleDateString("en-GB")} {/* 15/03/2026 */}
         </p>
+
 
         <p className="text-gray-500 text-sm">{event.location}</p>
 

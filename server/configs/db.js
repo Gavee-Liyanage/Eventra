@@ -2,10 +2,6 @@ import mongoose from "mongoose";
 
 const connectDB = async () => {
   try {
-    mongoose.connection.on("connected", () =>
-      console.log("✅ MongoDB connected:", mongoose.connection.name)
-    );
-
     const uri = process.env.MONGODB_URI;
 
     if (!uri) {
@@ -13,12 +9,17 @@ const connectDB = async () => {
     }
 
     if (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://")) {
-      throw new Error('Invalid MongoDB URI. Must start with "mongodb://" or "mongodb+srv://".');
+      throw new Error(
+        'Invalid MongoDB URI. Must start with "mongodb://" or "mongodb+srv://".'
+      );
     }
 
     await mongoose.connect(uri);
+
+    console.log("MongoDB connected ");
+
   } catch (error) {
-    console.error("❌ MongoDB connection error:", error.message);
+    console.error("MongoDB connection error:", error.message);
     process.exit(1);
   }
 };
