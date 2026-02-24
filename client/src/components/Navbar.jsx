@@ -1,26 +1,80 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { assets } from "../assets/assets";
-import { MenuIcon, SearchIcon } from "lucide-react";
-import { NavLink, Link, useLocation } from "react-router-dom";
+import { MenuIcon, SearchIcon, ChevronDown, LogOut, User as UserIcon, Heart } from "lucide-react";
+import { NavLink, Link, useLocation, useNavigate } from "react-router-dom";
+import axios from "axios";
+import AuthModal from "../components/AuthModal"; 
 
+const API = "http://localhost:3000/api";
+
+const getInitials = (name = "") => {
+  const parts = name.trim().split(" ").filter(Boolean);
+  if (!parts.length) return "U";
+  const first = parts[0][0] || "U";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase();
+};
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+
+  // Logged-in user state
+  const [user, setUser] = useState(() => {
+    try {
+      const u = localStorage.getItem("qs_user");
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Dropdown state
+  const [openMenu, setOpenMenu] = useState(false);
+  const menuRef = useRef(null);
 
   const location = useLocation();
+  const navigate = useNavigate();
   const isHome = location.pathname === "/";
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 60);
-    };
-
-    if (isHome) {
-      window.addEventListener("scroll", handleScroll);
-    }
-
+    const handleScroll = () => setScrolled(window.scrollY > 60);
+    if (isHome) window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHome]);
+
+  // Close dropdown on outside click / Esc
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(e.target)) setOpenMenu(false);
+    };
+    const onEsc = (e) => e.key === "Escape" && setOpenMenu(false);
+
+    if (openMenu) {
+      document.addEventListener("mousedown", onDocClick);
+      window.addEventListener("keydown", onEsc);
+    }
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      window.removeEventListener("keydown", onEsc);
+    };
+  }, [openMenu]);
+
+  const handleLogout = async () => {
+    try {
+      
+      await axios.post(`${API}/auth/logout`, {}, { withCredentials: true });
+    } catch {
+      
+    } finally {
+      localStorage.removeItem("qs_token");
+      localStorage.removeItem("qs_user");
+      setUser(null);
+      setOpenMenu(false);
+      navigate("/");
+    }
+  };
 
   return (
     <header
@@ -31,10 +85,9 @@ const Navbar = () => {
             ? "bg-indigo-800 shadow-lg"
             : "bg-transparent"
           : "bg-indigo-900 shadow-md"
-      }`}>
-
-      <nav className="flex items-center justify-between px-6 md:px-16 lg:px-36 py-5 text-white md:text-white">
-
+      }`}
+    >
+      <nav className="flex items-center justify-between px-6 md:px-16 lg:px-36 py-5 text-white">
         {/* Logo */}
         <Link to="/" className="max-md:flex-1">
           <img src={assets.logo_Quick} alt="logo" className="w-36 h-auto" />
@@ -46,8 +99,8 @@ const Navbar = () => {
             isHome && !scrolled
               ? "backdrop-blur bg-black/70 md:bg-white/10 md:border border-gray-300/20 px-6 py-2 rounded-3xl"
               : ""
-          }`}>
-
+          }`}
+        >
           {[
             { name: "Home", path: "/" },
             { name: "Events", path: "/events" },
@@ -58,64 +111,103 @@ const Navbar = () => {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `relative transition duration-300 
-                hover:text-indigo-300
-                ${
-                  isActive
-                    ? "text-white font-bold"
-                    : "text-white"
+                `relative transition duration-300 hover:text-indigo-300 ${
+                  isActive ? "text-white font-bold" : "text-white"
                 }`
-              }>
-
-              {({ isActive }) => (
-                <>
-                  {item.name}
-
-                  {/* Animated underline */}
-                  <span
-                    className={`absolute left-0 -bottom-1 h-[2px] bg-indigo-300 transition-all duration-300
-                    ${
-                      isActive
-                        ? "w-full"
-                        : "w-0 group-hover:w-full"
-                    }`}
-                  ></span>
-                </>
-              )}
+              }
+            >
+              {item.name}
             </NavLink>
           ))}
         </div>
 
-
         {/* Right Side */}
         <div className="flex items-center gap-4">
+          {isHome && <SearchIcon className="w-5 h-5 cursor-pointer" />}
 
-          {/* Home Page Controls */}
-          {isHome && (
-            <>
-              <SearchIcon className="w-5 h-5 cursor-pointer" />
+          {/* If NOT logged in -> Login button */}
+          {!user ? (
+            <button
+              onClick={() => setShowAuth(true)}
+              className="px-4 py-1 sm:px-6 sm:py-2 bg-primary hover:bg-primary-dull transition rounded-full font-medium cursor-pointer"
+            >
+              Login
+            </button>
+          ) : (
+            /* If logged in -> Avatar + Dropdown */
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setOpenMenu((p) => !p)}
+                className="flex items-center gap-3 rounded-full bg-white/10 border border-white/20 px-3 py-2 hover:bg-white/15 transition"
+              >
+                {/* Avatar circle */}
+                <div className="w-9 h-9 rounded-full bg-white/20 border border-white/20 flex items-center justify-center font-bold">
+                  {getInitials(user?.name)}
+                </div>
 
-              <button className="px-4 py-1 sm:px-6 sm:py-2 bg-primary hover:bg-primary-dull 
-              transition rounded-full font-medium cursor-pointer">
-                Login
+                {/* Name (hide on small screens) */}
+                <div className="hidden sm:block text-left leading-tight">
+                  <p className="text-sm font-semibold text-white">
+                    {user?.name || "User"}
+                  </p>
+                  <p className="text-xs text-white/70">{user?.email}</p>
+                </div>
+
+                <ChevronDown
+                  size={16}
+                  className={`text-white/80 transition ${openMenu ? "rotate-180" : ""}`}
+                />
               </button>
-            </>
-          )}
 
-          {/* Other Pages Profile */}
-          {!isHome && (
-            <img
-              src="https://i.pravatar.cc/40"
-              className="w-9 h-9 rounded"
-              alt="profile"
-            />
+              {/* Dropdown menu */}
+              {openMenu && (
+                <div className="absolute right-0 mt-3 w-56 rounded-2xl overflow-hidden bg-white text-gray-800 shadow-2xl border border-gray-100">
+                  <button
+                    onClick={() => {
+                      setOpenMenu(false);
+                      navigate("/profile"); // create this page if you want
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
+                  >
+                    <UserIcon size={18} className="text-gray-500" />
+                    <span className="text-sm font-medium">Profile</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setOpenMenu(false);
+                      navigate("/favorite");
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
+                  >
+                    <Heart size={18} className="text-gray-500" />
+                    <span className="text-sm font-medium">Favorites</span>
+                  </button>
+
+                  <div className="h-px bg-gray-100" />
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-600"
+                  >
+                    <LogOut size={18} />
+                    <span className="text-sm font-semibold">Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           <MenuIcon className="md:hidden w-7 h-7 cursor-pointer" />
         </div>
-
-
       </nav>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
+        onAuthSuccess={(u) => setUser(u)} 
+      />
     </header>
   );
 };
