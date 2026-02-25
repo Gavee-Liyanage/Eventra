@@ -1,4 +1,3 @@
-// src/components/AuthModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { X, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
@@ -9,7 +8,7 @@ const SAVED_EMAIL_KEY = "qs_saved_email";
 const AUTH_IMAGE =
   "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=900&q=80";
 
-/* ---------------- helpers ---------------- */
+
 const getStrength = (pw) => {
   const p = pw || "";
   let score = 0;
@@ -170,18 +169,24 @@ const AuthModal = ({ isOpen, onClose, onAuthSuccess }) => {
     const url =
       mode === "login" ? `${API}/auth/login` : `${API}/auth/register`;
 
-    const res = await axios.post(url, payload, { withCredentials: true });
+    // inside submit() success:
 
+    const res = await axios.post(url, payload, { withCredentials: true });
     const { token, user } = res.data;
 
     localStorage.setItem("qs_token", token);
     localStorage.setItem("qs_user", JSON.stringify(user));
 
+    // tell the whole app "user logged in"
+    window.dispatchEvent(new CustomEvent("qs_auth_changed", { detail: user }));
+
     if (mode === "login") {
-      if (rememberEmail)
-        localStorage.setItem(SAVED_EMAIL_KEY, form.email.trim());
+      if (rememberEmail) localStorage.setItem(SAVED_EMAIL_KEY, form.email.trim());
       else localStorage.removeItem(SAVED_EMAIL_KEY);
     }
+
+    onAuthSuccess?.(user);
+    onClose?.();
 
     onAuthSuccess?.(user);
     onClose?.();
