@@ -1,8 +1,12 @@
-// client/src/pages/EventInfo.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { Crown, Zap, Users, Armchair, Ticket } from "lucide-react";
+
+// popup login
+import { useAuthGate } from "../context/AuthGateContext";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
 
 /** convert anything to safe number */
 const toNum = (v) => {
@@ -14,7 +18,7 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/** normalize ticketPrices: supports object OR JSON string OR missing */
+/** normalize ticketPrices */
 const normalizeTicketPrices = (raw) => {
   let tp = raw;
 
@@ -71,6 +75,9 @@ const EventInfo = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  // popup login
+  const { isAuthed, openAuthGate, getUser } = useAuthGate();
+
   const [event, setEvent] = useState(null);
 
   // ticket selector
@@ -81,18 +88,31 @@ const EventInfo = () => {
   const [similar, setSimilar] = useState([]);
   const [similarLoading, setSimilarLoading] = useState(true);
 
+  // Wishlist state (backend-based)
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingWish, setSavingWish] = useState(false);
+
+  // axiosConfig for wishlist routes
+  const axiosConfig = useMemo(() => {
+    const token = localStorage.getItem("qs_token");
+    return {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      withCredentials: true,
+    };
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await axios.get(`http://localhost:3000/api/events/${id}`);
+        const res = await axios.get(`${API_BASE}/api/events/${id}`);
         const ev = res.data?.event || res.data?.data || res.data;
 
         setEvent(ev);
         setQty(1);
 
-        console.log("✅ EVENT FROM API:", ev);
-        console.log("✅ ticketPrices raw:", ev?.ticketPrices);
-        console.log("✅ price fallback raw:", ev?.price);
+        console.log(" EVENT FROM API:", ev);
+        console.log(" ticketPrices raw:", ev?.ticketPrices);
+        console.log(" price fallback raw:", ev?.price);
       } catch (err) {
         console.log("Event fetch error:", err);
       }
@@ -101,6 +121,37 @@ const EventInfo = () => {
     load();
   }, [id]);
 
+  // Check if this event is already in wishlist
+  useEffect(() => {
+    const checkSaved = async () => {
+      if (!event?._id) return;
+
+      if (!isAuthed()) {
+        setIsSaved(false);
+        return;
+      }
+
+      try {
+        const res = await axios.get(`${API_BASE}/api/users/wishlist`, axiosConfig);
+
+        const data = res.data;
+        const list = Array.isArray(data) ? data : data.items || data.wishlist || [];
+
+        const ids = list
+          .map((x) => x?.event?._id || x?._id)
+          .filter(Boolean);
+
+        setIsSaved(ids.includes(event._id));
+      } catch (e) {
+        
+        setIsSaved(false);
+      }
+    };
+
+    checkSaved();
+    
+  }, [event?._id]);
+
   useEffect(() => {
     const loadSimilar = async () => {
       if (!event?._id) return;
@@ -108,7 +159,7 @@ const EventInfo = () => {
       try {
         setSimilarLoading(true);
 
-        const res = await axios.get("http://localhost:3000/api/events");
+        const res = await axios.get(`${API_BASE}/api/events`);
 
         const all = Array.isArray(res.data)
           ? res.data
@@ -172,7 +223,12 @@ const EventInfo = () => {
   /** build ticket options with fallback "General" from event.price */
   const ticketOptions = useMemo(() => {
     const tiers = [
-      { key: "earlyBird", label: "Early Bird", price: tp.earlyBird, badge: "Limited" },
+      {
+        key: "earlyBird",
+        label: "Early Bird",
+        price: tp.earlyBird,
+        badge: "Limited",
+      },
       { key: "standing", label: "Standing", price: tp.standing },
       { key: "seating", label: "Seating", price: tp.seating },
       { key: "vip", label: "VIP", price: tp.vip, badge: "Best view" },
@@ -185,17 +241,10 @@ const EventInfo = () => {
     return [{ key: "general", label: "General", price: generalPrice }];
   }, [tp, event?.price]);
 
-  const hasAnyTier = useMemo(
-    () => ticketOptions.some((t) => t.price >= 0),
-    [ticketOptions]
-  );
-
   /** auto-select first available tier */
   useEffect(() => {
     const firstAvailable =
-      ticketOptions.find((t) => t.price > 0)?.key ||
-      ticketOptions[0]?.key ||
-      "general";
+      ticketOptions.find((t) => t.price > 0)?.key || ticketOptions[0]?.key || "general";
 
     setTicketType((prev) => {
       const stillExists = ticketOptions.some((t) => t.key === prev);
@@ -222,6 +271,75 @@ const EventInfo = () => {
     return Math.max(0, selectedTicketPrice) * Number(qty || 1);
   }, [selectedTicketPrice, qty]);
 
+  
+  const isFreeSelected = selectedTicketPrice === 0;
+
+  // handle booking click
+  const handleBookNow = () => {
+    if (!ticketType) {
+      alert("Please select a ticket type first");
+      return;
+    }
+
+    const bookingState = {
+      event,
+      tier: { name: ticketType },
+      qty,
+      total: totalPrice,
+    };
+
+    // If NOT logged in -> OPEN POPUP (NO redirect)
+    if (!isAuthed()) {
+      openAuthGate({
+        mode: "login",
+        onSuccess: () => {
+          const u = getUser?.();
+          if (!u?._id) return;
+          navigate("/payment", { state: bookingState });
+        },
+      });
+      return;
+    }
+
+    // Already logged in -> go payment
+    navigate("/payment", { state: bookingState });
+  };
+
+  // Save button logic (backend wishlist API)
+  const handleSave = () => {
+    if (!event?._id) return;
+
+    const doSave = async () => {
+      setSavingWish(true);
+      try {
+        if (isSaved) {
+          // remove
+          await axios.delete(`${API_BASE}/api/users/wishlist/${event._id}`, axiosConfig);
+          setIsSaved(false);
+        } else {
+          // add
+          await axios.post(`${API_BASE}/api/users/wishlist/${event._id}`, {}, axiosConfig);
+          setIsSaved(true);
+        }
+      } catch (e) {
+        alert(e?.response?.data?.message || "Wishlist update failed.");
+      } finally {
+        setSavingWish(false);
+      }
+    };
+
+    // not logged in → open popup login, then save
+    if (!isAuthed()) {
+      openAuthGate({
+        mode: "login",
+        onSuccess: () => doSave(),
+      });
+      return;
+    }
+
+    doSave();
+  };
+
   if (!event) return <p className="pt-40 text-center">Loading...</p>;
 
   return (
@@ -236,11 +354,18 @@ const EventInfo = () => {
           </div>
 
           <div className="flex gap-3">
-            <button className="px-4 py-2 rounded-xl border bg-[#3f78f3] hover:bg-[#2060e9] transition text-white">
-              Save
-            </button>
-            <button className="px-4 py-2 rounded-xl border bg-[#3f78f3] hover:bg-[#2060e9] transition text-white">
-              Share
+            <button
+              onClick={handleSave}
+              disabled={savingWish}
+              className={[
+                "px-4 py-2 rounded-xl border transition text-white",
+                isSaved
+                  ? "bg-pink-600 hover:bg-pink-700 border-pink-600"
+                  : "bg-[#3f78f3] hover:bg-[#2060e9] border-[#3f78f3]",
+                savingWish ? "opacity-70 cursor-not-allowed" : "",
+              ].join(" ")}
+            >
+              {savingWish ? "Saving..." : isSaved ? "Saved ✓" : "Save"}
             </button>
           </div>
         </div>
@@ -262,7 +387,7 @@ const EventInfo = () => {
             </div>
           </div>
 
-          {/* MIDDLE (smaller now) */}
+          {/* MIDDLE */}
           <div className="lg:col-span-4 min-w-0 space-y-8">
             <div className="bg-white rounded-3xl shadow-lg p-7">
               <div className="flex items-center justify-between gap-4">
@@ -305,20 +430,18 @@ const EventInfo = () => {
             </div>
           </div>
 
-          {/* RIGHT (bigger now, no overlap) */}
+          {/* RIGHT */}
           <div className="lg:col-span-4 min-w-0">
             <div className="sticky top-28">
               <div className="relative rounded-3xl shadow-xl overflow-hidden bg-white">
-                {/* background accents */}
                 <div className="absolute inset-0 bg-gradient-to-br from-white via-white to-[#f2f6ff]" />
                 <div className="absolute -top-16 -right-20 w-56 h-56 rounded-full bg-[#3f78f3]/10 blur-3xl" />
                 <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full bg-indigo-500/10 blur-3xl" />
 
                 <div className="relative p-7">
-                  {/* Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xl font-semibold text-gray-900">Book tickets</p>                      
+                      <p className="text-xl font-semibold text-gray-900">Book tickets</p>
                     </div>
                   </div>
 
@@ -326,19 +449,7 @@ const EventInfo = () => {
                   <div className="mt-5">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-gray-700">Choose ticket type</p>
-
-                      {ticketOptions.length === 1 && ticketOptions[0].key === "general" && (
-                        <span className="text-[11px] px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                          General only
-                        </span>
-                      )}
                     </div>
-
-                    {ticketOptions.length === 1 && ticketOptions[0].key === "general" && (
-                      <div className="mt-3 text-sm text-gray-600 bg-white/70 border border-gray-200 rounded-2xl p-3">
-                        Ticket tiers aren’t set yet — showing <b>General</b> tickets.
-                      </div>
-                    )}
 
                     <div className="mt-3 space-y-3">
                       {ticketOptions.map((t) => {
@@ -349,7 +460,6 @@ const EventInfo = () => {
                         const isStanding = t.key === "standing";
                         const isSeating = t.key === "seating";
                         const isGeneral = t.key === "general";
-
                         const isPopular = isStanding || isSeating;
 
                         const TierIcon = isVIP
@@ -369,7 +479,6 @@ const EventInfo = () => {
                               bg: "bg-purple-50/60",
                               dot: "bg-purple-600",
                               price: "text-purple-700",
-                              badge: "bg-purple-600 text-white",
                             }
                           : isEarly
                           ? {
@@ -378,7 +487,6 @@ const EventInfo = () => {
                               bg: "bg-emerald-50/60",
                               dot: "bg-emerald-600",
                               price: "text-emerald-700",
-                              badge: "bg-emerald-600 text-white",
                             }
                           : {
                               ring: "ring-[#3f78f3]/25",
@@ -386,7 +494,6 @@ const EventInfo = () => {
                               bg: "bg-white",
                               dot: "bg-[#3f78f3]",
                               price: "text-gray-900",
-                              badge: "bg-gray-100 text-gray-700",
                             };
 
                         return (
@@ -408,7 +515,6 @@ const EventInfo = () => {
 
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
-                                {/* Radio */}
                                 <span
                                   className={[
                                     "w-5 h-5 rounded-full border flex items-center justify-center",
@@ -417,15 +523,11 @@ const EventInfo = () => {
                                 >
                                   {active ? (
                                     <span
-                                      className={[
-                                        "w-2.5 h-2.5 rounded-full",
-                                        accent.dot,
-                                      ].join(" ")}
+                                      className={["w-2.5 h-2.5 rounded-full", accent.dot].join(" ")}
                                     />
                                   ) : null}
                                 </span>
 
-                                {/* Icon + labels */}
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <span
@@ -448,18 +550,14 @@ const EventInfo = () => {
                                       />
                                     </span>
 
-                                    <p className="text-sm font-semibold text-gray-900">
-                                      {t.label}
-                                    </p>
+                                    <p className="text-sm font-semibold text-gray-900">{t.label}</p>
 
-                                    {/* Most popular */}
                                     {isPopular && (
                                       <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800 border border-amber-200">
                                         Popular
                                       </span>
                                     )}
 
-                                    {/* tier badges */}
                                     {(t.badge || isVIP || isEarly) && !isGeneral && (
                                       <span
                                         className={[
@@ -480,7 +578,6 @@ const EventInfo = () => {
                                 </div>
                               </div>
 
-                              {/* Price chip */}
                               <div
                                 className={[
                                   "shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border",
@@ -508,7 +605,7 @@ const EventInfo = () => {
                   {/* Price summary */}
                   <div className="mt-4 flex items-end justify-between">
                     <div>
-                      <p className="text-2xl mt-4 font-bold text-indigo-700 leading-tight">
+                      <p className="text-xl mt-4 font-bold text-indigo-700 leading-tight">
                         {priceLabel}
                       </p>
                     </div>
@@ -530,7 +627,7 @@ const EventInfo = () => {
                         <button
                           type="button"
                           onClick={() => setQty((q) => Math.max(1, q - 1))}
-                          className="w-11 h-11 rounded-xl bg-[#3f78f3] hover:bg-[#2060e9] text-white hover:bg-black transition"
+                          className="w-11 h-11 rounded-xl bg-[#3f78f3] hover:bg-[#2060e9] text-white transition"
                         >
                           −
                         </button>
@@ -555,28 +652,25 @@ const EventInfo = () => {
                   {/* Total */}
                   <div className="mt-6 border-t border-gray-200/70 pt-4 flex items-center justify-between">
                     <p className="text-sm text-gray-600">Total</p>
-                    <p className="text-lg font-bold text-gray-900">
-                      {selectedTicketPrice === 0
-                        ? "Free"
-                        : `Rs. ${totalPrice.toLocaleString("en-LK")}`}
+                    <p className="text-2xl font-bold text-gray-900">
+                      {selectedTicketPrice === 0 ? "Free" : `Rs. ${totalPrice.toLocaleString("en-LK")}`}
                     </p>
                   </div>
 
-                  {/* CTA */}
-                  <button
-                    className="w-full mt-5 bg-gradient-to-r from-[#3f78f3] to-indigo-600 text-white py-3.5 rounded-2xl hover:opacity-95 transition font-semibold shadow-lg shadow-indigo-200/60"
-                    onClick={() => {
-                      alert(
-                        `Booking ${qty} ticket(s)\nEvent: ${event.title}\nType: ${ticketType}\nTotal: Rs. ${totalPrice}`
-                      );
-                    }}
-                  >
-                    Book now
-                  </button>
-
-                  <button className="w-full mt-3 bg-white/70 border border-gray-200 py-3.5 rounded-2xl hover:bg-white transition font-medium">
-                    Save event
-                  </button>
+                  {/* CTA: only show button if NOT free */}
+                  {!isFreeSelected ? (
+                    <button
+                      className="w-full mt-5 bg-gradient-to-r from-[#3f78f3] to-indigo-600 text-white py-3.5 rounded-2xl hover:opacity-95 transition font-semibold shadow-lg shadow-indigo-200/60"
+                      onClick={handleBookNow}
+                    >
+                      Book now
+                    </button>
+                  ) : (
+                    <div className="w-full mt-5 rounded-2xl border border-gray-200 bg-white/70 p-4 text-sm text-gray-700">
+                      <p className="font-semibold text-gray-900">Free entry 🎉</p>
+                      <p className="text-gray-600 mt-1">No booking is required for free tickets.</p>
+                    </div>
+                  )}
 
                   <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">
                     By booking, you agree to our terms and refund policy.
