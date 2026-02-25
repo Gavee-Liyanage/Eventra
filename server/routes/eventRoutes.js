@@ -3,13 +3,13 @@ import {
   getEventById,
   getSimilarEvents,
   getEvents,
-  getPopularEvents,
+  getRecommendedEvents,
 } from "../controllers/eventController.js";
 
 const router = express.Router();
 
 router.get("/", getEvents);
-router.get("/popular", getPopularEvents);
+router.get("/recommended", protect, getRecommendedEvents);
 router.get("/similar/:id", getSimilarEvents);
 router.get("/:id", getEventById);
 
