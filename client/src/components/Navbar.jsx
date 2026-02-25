@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { assets } from "../assets/assets";
-import { MenuIcon, SearchIcon, ChevronDown, LogOut, User as UserIcon, Heart } from "lucide-react";
+import {
+  MenuIcon,
+  SearchIcon,
+  ChevronDown,
+  LogOut,
+  User as UserIcon,
+  Heart,
+  Calendar,
+} from "lucide-react";
 import { NavLink, Link, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import AuthModal from "../components/AuthModal"; 
@@ -43,6 +51,31 @@ const Navbar = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHome]);
 
+  // Keep navbar user in sync when login happens from ANYWHERE (payment popup too)
+  useEffect(() => {
+    const syncUser = () => {
+      try {
+        const u = localStorage.getItem("qs_user");
+        setUser(u ? JSON.parse(u) : null);
+      } catch {
+        setUser(null);
+      }
+    };
+
+    const onAuthChanged = (e) => {
+      // prefer event detail, fallback to localStorage
+      if (e?.detail !== undefined) setUser(e.detail);
+      else syncUser();
+    };
+
+    window.addEventListener("qs_auth_changed", onAuthChanged);
+
+    // sync once on mount
+    syncUser();
+
+    return () => window.removeEventListener("qs_auth_changed", onAuthChanged);
+  }, []);
+
   // Close dropdown on outside click / Esc
   useEffect(() => {
     const onDocClick = (e) => {
@@ -63,13 +96,17 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      
+      // optional: notify backend to clear cookie
       await axios.post(`${API}/auth/logout`, {}, { withCredentials: true });
     } catch {
-      
+      // ignore (frontend logout should still work)
     } finally {
       localStorage.removeItem("qs_token");
       localStorage.removeItem("qs_user");
+
+      // broadcast auth change so navbar & app update instantly
+      window.dispatchEvent(new CustomEvent("qs_auth_changed", { detail: null }));
+
       setUser(null);
       setOpenMenu(false);
       navigate("/");
@@ -105,7 +142,8 @@ const Navbar = () => {
             { name: "Home", path: "/" },
             { name: "Events", path: "/events" },
             { name: "Categories", path: "/categories" },
-            { name: "Favorites", path: "/favorite" },
+            { name: "My Bookings", path: "/my-bookings" },
+            
           ].map((item) => (
             <NavLink
               key={item.path}
@@ -122,9 +160,7 @@ const Navbar = () => {
         </div>
 
         {/* Right Side */}
-        <div className="flex items-center gap-4">
-          {isHome && <SearchIcon className="w-5 h-5 cursor-pointer" />}
-
+        <div className="flex items-center gap-4">         
           {/* If NOT logged in -> Login button */}
           {!user ? (
             <button
@@ -155,7 +191,9 @@ const Navbar = () => {
 
                 <ChevronDown
                   size={16}
-                  className={`text-white/80 transition ${openMenu ? "rotate-180" : ""}`}
+                  className={`text-white/80 transition ${
+                    openMenu ? "rotate-180" : ""
+                  }`}
                 />
               </button>
 
@@ -165,7 +203,7 @@ const Navbar = () => {
                   <button
                     onClick={() => {
                       setOpenMenu(false);
-                      navigate("/profile"); // create this page if you want
+                      navigate("/profile"); 
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
                   >
@@ -176,12 +214,23 @@ const Navbar = () => {
                   <button
                     onClick={() => {
                       setOpenMenu(false);
-                      navigate("/favorite");
+                      navigate("/wishlist");
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
                   >
                     <Heart size={18} className="text-gray-500" />
-                    <span className="text-sm font-medium">Favorites</span>
+                    <span className="text-sm font-medium">Wishlist</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setOpenMenu(false);
+                      navigate("/my-bookings");
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
+                  >
+                    <Calendar size={18} className="text-gray-500" />
+                    <span className="text-sm font-medium">Bookings</span>
                   </button>
 
                   <div className="h-px bg-gray-100" />
@@ -206,7 +255,10 @@ const Navbar = () => {
       <AuthModal
         isOpen={showAuth}
         onClose={() => setShowAuth(false)}
-        onAuthSuccess={(u) => setUser(u)} 
+        onAuthSuccess={(u) => {
+          setUser(u); // instant update when login via navbar          
+          window.dispatchEvent(new CustomEvent("qs_auth_changed", { detail: u }));
+        }}
       />
     </header>
   );
