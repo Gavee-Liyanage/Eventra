@@ -1,6 +1,6 @@
-// src/pages/Profile.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import {
   User,
   Mail,
@@ -10,11 +10,11 @@ import {
   Camera,
   Lock,
   X,
+  Trash2,
 } from "lucide-react";
 
 const API = "http://localhost:3000/api";
 
-/* ---------- helpers ---------- */
 const getInitials = (name = "") => {
   const parts = name.trim().split(" ").filter(Boolean);
   if (!parts.length) return "U";
@@ -23,18 +23,18 @@ const getInitials = (name = "") => {
   return (first + last).toUpperCase();
 };
 
-/* ---------- Toast ---------- */
+/* Toast */
 const Toast = ({ msg, type }) => {
   if (!msg) return null;
   return (
     <div className={`fixed top-6 right-6 z-[9999] px-5 py-3 rounded-2xl shadow-xl 
-    ${type === "error" ? "bg-red-500" : "bg-indigo-600"} text-white animate-fadeIn`}>
+    ${type === "error" ? "bg-red-500" : "bg-indigo-600"} text-white`}>
       {msg}
     </div>
   );
 };
 
-/* ---------- Password Modal ---------- */
+/* Password Modal */
 const PasswordModal = ({ open, onClose, onSubmit }) => {
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -75,6 +75,8 @@ const PasswordModal = ({ open, onClose, onSubmit }) => {
 };
 
 const Profile = () => {
+  const navigate = useNavigate();
+
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("qs_user"));
@@ -102,7 +104,7 @@ const Profile = () => {
     fetchBookings();
   }, []);
 
-  /* ---------- API calls ---------- */
+  /* API calls */
 
   const fetchWishlist = async () => {
     try {
@@ -122,6 +124,26 @@ const Profile = () => {
       });
       setBookings(res.data || []);
     } catch {}
+  };
+
+  /* REMOVE WISHLIST ITEM */
+
+  const removeWishlistItem = async (eventId, e) => {
+    e.stopPropagation(); // stop navigation
+    const token = localStorage.getItem("qs_token");
+
+    const old = wishlist;
+    setWishlist((prev) => prev.filter((x) => x._id !== eventId));
+
+    try {
+      await axios.delete(`${API}/users/wishlist/${eventId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showToast("Removed from wishlist");
+    } catch {
+      setWishlist(old);
+      showToast("Failed to remove", "error");
+    }
   };
 
   const updateProfile = async (e) => {
@@ -168,19 +190,19 @@ const Profile = () => {
     setTimeout(() => setToast(""), 3000);
   };
 
-  /* ---------- UI ---------- */
-
   return (
     <div className="min-h-screen pt-28 px-6 bg-gradient-to-b from-indigo-50 to-white">
       <Toast msg={toast} type={toastType} />
-      <PasswordModal open={showPwModal} onClose={()=>setShowPwModal(false)} onSubmit={changePassword}/>
+      <PasswordModal
+        open={showPwModal}
+        onClose={() => setShowPwModal(false)}
+        onSubmit={changePassword}
+      />
 
       <div className="max-w-6xl mx-auto space-y-6 text-gray-700">
 
         {/* HERO */}
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-8 text-white shadow-xl flex items-center gap-6">
-          
-          {/* Avatar */}
           <label className="relative cursor-pointer">
             {image ? (
               <img src={image} className="w-24 h-24 rounded-2xl object-cover border"/>
@@ -208,7 +230,6 @@ const Profile = () => {
           {/* PROFILE FORM */}
           <div className="md:col-span-2 bg-white rounded-3xl p-6 shadow border">
             <h2 className="font-bold text-lg mb-5">Profile details</h2>
-
             <form onSubmit={updateProfile} className="space-y-4">
               <div className="flex items-center gap-3 border rounded-xl px-4 py-3">
                 <User className="text-gray-400"/>
@@ -238,20 +259,38 @@ const Profile = () => {
           <div className="space-y-6">
 
             {/* WISHLIST */}
-            <div className="bg-white rounded-3xl p-6 shadow border">
+            <div
+              onClick={() => navigate("/wishlist")}
+              className="bg-white rounded-3xl p-6 shadow border cursor-pointer hover:shadow-lg transition"
+            >
               <h3 className="font-bold mb-4 flex gap-2"><Heart/> Wishlist</h3>
+
               <div className="space-y-3">
                 {wishlist.slice(0,3).map(ev=>(
-                  <div key={ev._id} className="text-sm border rounded-xl p-3">
+                  <div key={ev._id} className="text-sm border rounded-xl p-3 flex justify-between items-center">
                     {ev.title}
+
+                    <button
+                      onClick={(e)=>removeWishlistItem(ev._id,e)}
+                      className="text-red-500 hover:bg-red-50 p-1 rounded"
+                    >
+                      <Trash2 size={16}/>
+                    </button>
                   </div>
                 ))}
                 {!wishlist.length && <p className="text-sm text-gray-500">No favorites yet</p>}
               </div>
+
+              <p className="mt-3 text-xs text-indigo-600 font-semibold">
+                View full wishlist →
+              </p>
             </div>
 
             {/* BOOKINGS */}
-            <div className="bg-white rounded-3xl p-6 shadow border">
+            <div
+              onClick={() => navigate("/my-bookings")}
+              className="bg-white rounded-3xl p-6 shadow border cursor-pointer hover:shadow-lg transition"
+            >
               <h3 className="font-bold mb-4 flex gap-2"><Calendar/> Bookings</h3>
               <div className="space-y-3">
                 {bookings.slice(0,3).map(b=>(
@@ -261,6 +300,9 @@ const Profile = () => {
                 ))}
                 {!bookings.length && <p className="text-sm text-gray-500">No bookings yet</p>}
               </div>
+              <p className="mt-3 text-xs text-indigo-600 font-semibold">
+                View all bookings →
+              </p>
             </div>
 
           </div>
