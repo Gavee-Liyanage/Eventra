@@ -63,9 +63,7 @@ export const getEvents = async (req, res) => {
   }
 };
 
-/* ================================
-   GET EVENT BY ID
-================================ */
+/* GET EVENT BY ID */
 export const getEventById = async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
@@ -78,9 +76,7 @@ export const getEventById = async (req, res) => {
   }
 };
 
-/* ================================
-   GET SIMILAR EVENTS
-================================ */
+/* GET SIMILAR EVENTS */
 export const getSimilarEvents = async (req, res) => {
   try {
     const { id } = req.params;

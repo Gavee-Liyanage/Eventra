@@ -1,4 +1,3 @@
-// client/src/pages/Events.jsx
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -28,8 +27,7 @@ const THEME = {
   accentSoftBg: "bg-[#EFF6FF]",
   accentSoftHoverBg: "hover:bg-[#E1EEFF]",
 
-  ring: "focus:ring-2 focus:ring-[#93C5FD]/60", // soft blue ring
-
+  ring: "focus:ring-2 focus:ring-[#93C5FD]/60", 
   iconTile: "bg-[#EFF6FF] text-[#1E40AF]",
   iconTileHover: "hover:bg-[#E1EEFF]",
 
@@ -162,6 +160,7 @@ const Events = () => {
 
   // URL params
   const [searchParams, setSearchParams] = useSearchParams();
+  const categoryFromUrl = searchParams.get("category");
 
   const [search, setSearch] = useState("");
 
@@ -170,6 +169,12 @@ const Events = () => {
   const [category, setCategory] = useState("All");
   const [priceFilter, setPriceFilter] = useState("All");
 
+  useEffect(() => {
+    if (categoryFromUrl) {
+      setCategory(categoryFromUrl);
+    }
+  }, [categoryFromUrl]);
+  
   // price range
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(50000);
