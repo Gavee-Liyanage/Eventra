@@ -63,7 +63,9 @@ export const getEvents = async (req, res) => {
   }
 };
 
-/* GET EVENT BY ID */
+/* ================================
+   GET EVENT BY ID
+================================ */
 export const getEventById = async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
@@ -76,7 +78,9 @@ export const getEventById = async (req, res) => {
   }
 };
 
-/* GET SIMILAR EVENTS */
+/* ================================
+   GET SIMILAR EVENTS
+================================ */
 export const getSimilarEvents = async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,5 +99,20 @@ export const getSimilarEvents = async (req, res) => {
   } catch (error) {
     console.error("getSimilarEvents error:", error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+export const getRecommendedEvents = async (req, res) => {
+  try {
+    const limit = Number(req.query.limit || 4);
+
+    // simple fallback: latest events (later you can personalize)
+    const events = await Event.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+    res.json(events);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load recommendations" });
   }
 };
